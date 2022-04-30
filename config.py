@@ -3,6 +3,9 @@ train_json = "./data/transforms_train.json"
 test_json = "./data/transforms_test.json"
 val_json = "./data/transforms_val.json"
 
+#BATch_SIZE
+BATCH_SIZE = 5
+
 #Image Height and Width 
 image_width = 100
 image_height = 100

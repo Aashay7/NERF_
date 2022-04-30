@@ -45,32 +45,33 @@ def encode_position(x, dims):
     return torch.concat(positions, axis=-1)
 
 
-def sample_pdf(tValsMid, weights, nF, batchSize, imageHeight, imageWidth):
+def sample_pdf(tValsMid, weights, N, batchSize, imageHeight, imageWidth):
 	# add a small value to the weights to prevent it from nan
-	weights += 1e-5
+	weights = weights + 1e-5
 	# normalize the weights to get the pdf
 	pdf = weights / torch.sum(weights, dim=-1, keepdims=True)
 	# from pdf to cdf transformation
-	cdf = torch.cumsum(pdf, axis=-1)
+	cdf = torch.cumsum(pdf, -1)
 	# start the cdf with 0s
-	cdf = torch.concat([torch.zeros_like(cdf[..., :1]), cdf], -1)
+	cdf = torch.cat([torch.zeros_like(cdf[..., :1]), cdf], -1)
 	# get the sample points
-	u = torch.rand(shape=[batchSize, imageHeight, imageWidth, nF])
+	u = torch.rand(list(cdf.shape[:-1]) + [N])
+	u = u.contiguous()
 	# get the indices of the points of u when u is inserted into cdf in a
 	# sorted manner
-	indices = torch.searchsorted(cdf, u, side="right")
+	indices = torch.searchsorted(cdf, u, right=True)
 	# define the boundaries
-	below = torch.maximum(0, indices-1)
-	above = torch.minimum(cdf.shape[-1]-1, indices)
-	indicesG = torch.stack([below, above], dim=-1)
+	below = torch.max(torch.zeros_like(indices -1), indices-1)
+	above = torch.min((cdf.shape[-1]-1) * torch.zeros_like(indices), indices)	
+	indicesG = torch.stack([below, above], -1)
 	
+	matched_shape = [indicesG.shape[0], indicesG.shape[1], indicesG.shape[2], indicesG.shape[3], cdf.shape[-1]]
 	# gather the cdf according to the indices
-	cdfG = torch.gather(cdf, indicesG, axis=-1,
-		batch_dims=len(indicesG.shape)-2)
+	cdfG = torch.gather(cdf.unsqueeze(3).expand(matched_shape), 2, indicesG )
 	
+	matched_shape = [indicesG.shape[0], indicesG.shape[1], indicesG.shape[2], indicesG.shape[3], tValsMid.shape[-1]]
 	# gather the tVals according to the indices
-	tValsMidG = torch.gather(tValsMid, indicesG, axis=-1,
-		batch_dims=len(indicesG.shape)-2)
+	tValsMidG = torch.gather(tValsMid.unsqueeze(3).expand(matched_shape), 2, indicesG)
 	
     # create the samples by inverting the cdf
 	denom = cdfG[..., 1] - cdfG[..., 0]

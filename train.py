@@ -5,17 +5,16 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 from torch.optim import Adam
 from data import readJson, getImagePathsAndTMs, TotalSceneData
-from utils import get_focal, get_device, img2mse, mse2psnr, encode_position, render_image_depth
+from utils import get_focal, get_device, img2mse, mse2psnr, encode_position, render_image_depth, sample_pdf
 from nerf import NerfModel
-from skimage.io import imread
+from helper import eval_model
 import config
 
 #Constants
 BASE_DIR = r"./data"
-BATCH_SIZE = 5
+BATCH_SIZE = config.BATCH_SIZE
 NUM_EPOCHS = 1
 LEARNING_RATE = 5e-4
-
 
 print("Reading the Json Data")
 
@@ -62,58 +61,110 @@ valDataloader = DataLoader(valDataset, batch_size=BATCH_SIZE, shuffle=True)
 
 #Nerf model
 
-nerf = NerfModel(numLayers = config.numLayers, xyzDims = config.xyzDims, 
+nerfCoarse = NerfModel(numLayers = config.numLayers, xyzDims = config.xyzDims, 
+                 dirDims = config.dirDims, batchSize = BATCH_SIZE, 
+                 skipLayer = config.skipLayer, linearUnits = config.linearUnits)
+
+nerfFine = NerfModel(numLayers = config.numLayers, xyzDims = config.xyzDims, 
                  dirDims = config.dirDims, batchSize = BATCH_SIZE, 
                  skipLayer = config.skipLayer, linearUnits = config.linearUnits)
 
 device = get_device()
 
-nerf.to(device)
-
+nerfCoarse.to(device)
+nerfFine.to(device)
 #Intitializing the optimizer
 
-optimizer = Adam(params=nerf.parameters(), lr=LEARNING_RATE, betas=(0.9, 0.999))
-
-
+optimizer = Adam(params = list(nerfCoarse.parameters()) + list(nerfFine.parameters()), 
+                 lr=LEARNING_RATE, betas=(0.9, 0.999))
 
 
 train_loss = []
 val_loss = []
+
+# psnr_coarse_train_loss = []
+# psnr_coarse_train_loss = []
+# psnr_fine_val_loss = []
+# psnr_fine_val_loss = []
+
 for epoch in range(NUM_EPOCHS):
     train_running_loss = 0.0
-    test_running_loss  = 0.0
     
-    for image, originVector, directionVector, tVals in trainDataloader:
+    for image, originVectorCoarse, directionVectorCoarse, tValsCoarse in trainDataloader:
         
         image = torch.permute(image, (0,2,3,1))
         
         # r = o + t*d 
-        raysCoarse = (originVector[..., None, :] + 
-			(directionVector[..., None, :] * tVals[..., None]))
+        raysCoarse = (originVectorCoarse[..., None, :] + 
+			(directionVectorCoarse[..., None, :] * tValsCoarse[..., None]))
         
         
         #Encoding Inputs
-        rays = encode_position(raysCoarse, config.xyzDims)
-        dirs = torch.broadcast_to(directionVector[..., None, :], size=tuple(rays[..., :3].size()))
-        dirs = encode_position(dirs, config.dirDims)     
+        raysCoarse = encode_position(raysCoarse, config.xyzDims)
+        dirsCoarse = torch.broadcast_to(directionVectorCoarse[..., None, :], size=tuple(raysCoarse[..., :3].size()))
+        dirsCoarse = encode_position(dirsCoarse, config.dirDims)     
         
         # Sets model to TRAIN mode
-        nerf.train()
-        (rgb, sigma) = nerf(rays, dirs)
+        nerfCoarse.train()
+        (rgbCoarse, sigmaCoarse) = nerfCoarse(raysCoarse, dirsCoarse)
         
-        (renderedImage, renderedDepth, renderedWeight) = render_image_depth(rgb = rgb, sigma=sigma, tVals= tVals)
-        print("Image shape ", image.size())
-        print("renderedimage ", renderedImage.size())
-        print("rendereddepth ", renderedDepth.size())
-        print("renderedWeight ", renderedWeight.size())    
+        (renderedCoarseImage, renderedCoarseDepth, coarseWeights) = render_image_depth(rgb = rgbCoarse, sigma=sigmaCoarse, tVals= tValsCoarse)
         
-        #Calculate Loss
-        loss = img2mse(renderedImage, image)
+        # compute the mid-points of t vals
+        tValsCoarseMid = ((tValsCoarse[..., 1:] + tValsCoarse[..., :-1]) / 2.0)
+  
+        #Applying hierarchical sampling to get Fine points
+        tValsFine = sample_pdf(tValsMid=tValsCoarseMid,
+			weights=coarseWeights, N=config.numberFine, batchSize=BATCH_SIZE, 
+            imageHeight = config.image_height, imageWidth = config.image_width)
+        
+        tValsFine, _ = torch.sort(
+            torch.cat([tValsCoarse, tValsFine], -1 ), -1
+
+        )
+        
+        raysFine = (originVectorCoarse[..., None, :] + 
+			(directionVectorCoarse[..., None, :] * tValsFine[..., None]))
+        raysFine = encode_position(raysFine, config.xyzDims)
+        
+        dirsFine = torch.broadcast_to(directionVectorCoarse[..., None, :], size=tuple(raysFine[..., :3].size()))
+        dirsFine = encode_position(dirsFine, config.dirDims)
+        
+        # Sets model to TRAIN mode
+        nerfFine.train()
+        (rgbFine, sigmaFine) = nerfFine(raysFine, dirsFine)
+        
+        (renderedFineImage, renderedFineDepth, FineWeights) = render_image_depth(rgb = rgbFine, 
+                                                                                 sigma = sigmaFine, 
+                                                                                 tVals = tValsFine)
+        #Optimization
+        optimizer.zero_grad() 
+        
+        #Calculate Coarse Loss
+        loss = img2mse(renderedCoarseImage, image)
+        #Calculate Fine Loss and adding it with coarse loss
+        loss = loss + img2mse(renderedFineImage, image)  
+        
         #Backprop
-        optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        train_running_loss += loss.item()
         
+        train_running_loss = train_running_loss + loss.item()
+        break
+    
+    train_loss.append(train_running_loss / len(trainDataloader))
+    print("train_loss: ", train_loss)
+    
+    # Evaluating on Val Data 
+    eval_loss = eval_model(dataloader = valDataloader, coarseModel=nerfCoarse, fineModel=nerfFine)
+    val_loss.append(eval_loss)
+    print("val_loss: ", val_loss)
     
     
+    ###   update learning rate   ###
+    decay_rate = 0.1
+    decay_steps = args.lrate_decay * 1000
+    new_lrate = args.lrate * (decay_rate ** (global_step / decay_steps))
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = 
+    exit(1)
