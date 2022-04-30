@@ -167,4 +167,4 @@ for epoch in range(NUM_EPOCHS):
     # new_lrate = args.lrate * (decay_rate ** (global_step / decay_steps))
     # for param_group in optimizer.param_groups:
     #     param_group['lr'] = 
-    exit(1)
+    # exit(1)
