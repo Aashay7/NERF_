@@ -162,9 +162,9 @@ for epoch in range(NUM_EPOCHS):
     
     
     ###   update learning rate   ###
-    decay_rate = 0.1
-    decay_steps = args.lrate_decay * 1000
-    new_lrate = args.lrate * (decay_rate ** (global_step / decay_steps))
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = 
+    # decay_rate = 0.1
+    # decay_steps = args.lrate_decay * 1000
+    # new_lrate = args.lrate * (decay_rate ** (global_step / decay_steps))
+    # for param_group in optimizer.param_groups:
+    #     param_group['lr'] = 
     exit(1)
