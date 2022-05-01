@@ -141,6 +141,7 @@ def visualize_performance( epoch, image, originVectorCoarse, directionVectorCoar
         # renderedCoarseDepth = np.asarray(F.to_pil_image(renderedCoarseDepth[0].detach()))
         # renderedFineImage   = np.asarray(F.to_pil_image(renderedFineImage[0].detach()))
         # renderedFineDepth   = np.asarray(F.to_pil_image(renderedFineDepth[0].detach()))
+        image = np.asarray(image[0].detach())
         renderedCoarseImage = np.asarray(renderedCoarseImage[0].detach())
         renderedCoarseDepth = np.asarray(renderedCoarseDepth[0].detach())
         renderedFineImage   = np.asarray(renderedFineImage[0].detach())
@@ -148,7 +149,7 @@ def visualize_performance( epoch, image, originVectorCoarse, directionVectorCoar
         
         # Plot the rgb, depth and the loss plot.
         fig, ax = plt.subplots(nrows=2, ncols=4, figsize=(25, 10))
-        ax[0][0].imshow(renderedCoarseImage)
+        ax[0][0].imshow(image)
         ax[0][0].set_title(f"Predicted Coarse Image: {epoch:03d}")
         ax[0][1].imshow(renderedCoarseImage)
         ax[0][1].set_title(f"Predicted Coarse Image: {epoch:03d}")
@@ -160,8 +161,8 @@ def visualize_performance( epoch, image, originVectorCoarse, directionVectorCoar
         ax[0][3].set_xticks(np.arange(0, epoch + 1, 5.0))
         ax[0][3].set_title(f"Val Loss Plot: {epoch:03d}")
         
-        ax[0][0].imshow(renderedCoarseImage)
-        ax[0][0].set_title(f"Predicted Coarse Image: {epoch:03d}")
+        ax[1][0].imshow(image)
+        ax[1][0].set_title(f"Predicted Coarse Image: {epoch:03d}")
         ax[1][1].imshow(renderedFineImage)
         ax[1][1].set_title(f"Predicted Fine Image: {epoch:03d}")
 
