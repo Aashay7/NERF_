@@ -92,8 +92,6 @@ img2mse = lambda x, y : torch.mean((x - y) ** 2)
 mse2psnr = lambda x : -10. * torch.log(x) / torch.log(torch.Tensor([10.]))
 
 def get_focal(camera_angle, width):
-    print(camera_angle)
-    print(width)
     return (0.5 * width) / (np.tan(0.5 * float(camera_angle)))
 
 def make_dir(folderName):

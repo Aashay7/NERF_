@@ -74,7 +74,7 @@ nerfFine = NerfModel(numLayers = config.numLayers, xyzDims = config.xyzDims,
                  skipLayer = config.skipLayer, linearUnits = config.linearUnits)
 
 device = get_device()
-
+print("Using Device: ", device)
 nerfCoarse.to(device)
 nerfFine.to(device)
 #Intitializing the optimizer
@@ -92,6 +92,7 @@ val_loss = []
 # psnr_fine_val_loss = []
 
 for epoch in range(NUM_EPOCHS):
+    print(f"Starting {epoch}...")
     train_running_loss = 0.0
     
     for image, originVectorCoarse, directionVectorCoarse, tValsCoarse in trainDataloader:
@@ -168,13 +169,13 @@ for epoch in range(NUM_EPOCHS):
         train_running_loss = train_running_loss + loss.item()
     
     train_loss.append(train_running_loss / len(trainDataloader))
-    print("train_loss: ", train_loss)
+    print(f"EPOCH {epoch} Training Completed, Current Training Loss: {train_loss[-1]}, Next Evaluating Model")
     
     # Evaluating on Val Data 
     eval_loss = eval_model(dataloader = valDataloader, coarseModel=nerfCoarse, fineModel=nerfFine)
     val_loss.append(eval_loss  / len(valDataloader))
-    print("val_loss: ", val_loss)   
     
+    print(f"EPOCH {epoch} Evaluation Completed, Current Validation Loss: {val_loss[-1]}")
     # Apply ExponentialDecay to update LR
     newLR = LEARNING_RATE * (config.decay_rate ** (epoch / (config.lrate_decay * 1000)))
     for param_group in optimizer.param_groups:
