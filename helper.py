@@ -147,26 +147,30 @@ def visualize_performance( epoch, image, originVectorCoarse, directionVectorCoar
         renderedFineDepth   = np.asarray(renderedFineDepth[0].detach())
         
         # Plot the rgb, depth and the loss plot.
-        fig, ax = plt.subplots(nrows=2, ncols=3, figsize=(25, 10))
+        fig, ax = plt.subplots(nrows=2, ncols=4, figsize=(25, 10))
         ax[0][0].imshow(renderedCoarseImage)
         ax[0][0].set_title(f"Predicted Coarse Image: {epoch:03d}")
+        ax[0][1].imshow(renderedCoarseImage)
+        ax[0][1].set_title(f"Predicted Coarse Image: {epoch:03d}")
 
-        ax[0][1].imshow(renderedCoarseDepth)
-        ax[0][1].set_title(f"Depth Coarse Map: {epoch:03d}")
+        ax[0][2].imshow(renderedCoarseDepth)
+        ax[0][2].set_title(f"Depth Coarse Map: {epoch:03d}")
 
-        ax[0][2].plot(valLossData)
-        ax[0][2].set_xticks(np.arange(0, epoch + 1, 5.0))
-        ax[0][2].set_title(f"Val Loss Plot: {epoch:03d}")
+        ax[0][3].plot(valLossData)
+        ax[0][3].set_xticks(np.arange(0, epoch + 1, 5.0))
+        ax[0][3].set_title(f"Val Loss Plot: {epoch:03d}")
         
-        ax[1][0].imshow(renderedFineImage)
-        ax[1][0].set_title(f"Predicted Fine Image: {epoch:03d}")
+        ax[0][0].imshow(renderedCoarseImage)
+        ax[0][0].set_title(f"Predicted Coarse Image: {epoch:03d}")
+        ax[1][1].imshow(renderedFineImage)
+        ax[1][1].set_title(f"Predicted Fine Image: {epoch:03d}")
 
-        ax[1][1].imshow(renderedFineDepth)
-        ax[1][1].set_title(f"Depth Fine Map: {epoch:03d}")
+        ax[1][2].imshow(renderedFineDepth)
+        ax[1][2].set_title(f"Depth Fine Map: {epoch:03d}")
 
-        ax[1][2].plot(trainLossData)
-        ax[1][2].set_xticks(np.arange(0, epoch + 1, 5.0))
-        ax[1][2].set_title(f"Train Loss Plot: {epoch:03d}")
+        ax[1][3].plot(trainLossData)
+        ax[1][3].set_xticks(np.arange(0, epoch + 1, 5.0))
+        ax[1][3].set_title(f"Train Loss Plot: {epoch:03d}")
 
         fig.savefig(f"{dir}/{epoch:03d}.png")
         plt.close()

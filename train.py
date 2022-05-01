@@ -9,11 +9,11 @@ from helper import eval_model, visualize_performance
 import config
 
 #Constants
-BASE_DIR = r"./data"
+BASE_DIR = r"./drums"
 CHECKPOINT_DIR = r"./Checkpoints"
 IMAGE_DIR = r"./images"
 BATCH_SIZE = config.BATCH_SIZE
-NUM_EPOCHS = 1000
+NUM_EPOCHS = 100
 LEARNING_RATE = 5e-4
 
 #Create Folders
