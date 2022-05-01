@@ -1,5 +1,4 @@
 import torch 
-import torch.nn as nn 
 from torch.utils.data import DataLoader
 from torchvision import transforms
 from torch.optim import Adam
@@ -14,7 +13,7 @@ BASE_DIR = r"./data"
 CHECKPOINT_DIR = r"./Checkpoints"
 IMAGE_DIR = r"./images"
 BATCH_SIZE = config.BATCH_SIZE
-NUM_EPOCHS = 2
+NUM_EPOCHS = 1000
 LEARNING_RATE = 5e-4
 
 #Create Folders

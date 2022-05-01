@@ -15,10 +15,10 @@ near = 2
 far = 6
 
 # number of ray sample points for coarse and fine model
-numberCoarse = 16
-numberFine = 32
-# numberCoarse = 32
-# numberFine = 64
+# numberCoarse = 16
+# numberFine = 32
+numberCoarse = 32
+numberFine = 64
 
 # number of linear layers
 numLayers = 8
