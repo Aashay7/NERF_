@@ -15,8 +15,10 @@ near = 2
 far = 6
 
 # number of ray sample points for coarse and fine model
-numberCoarse = 32
-numberFine = 64
+numberCoarse = 16
+numberFine = 32
+# numberCoarse = 32
+# numberFine = 64
 
 # number of linear layers
 numLayers = 8
@@ -31,4 +33,8 @@ skipLayer = 4
 xyzDims = 8
 dirDims = 4
 
+#LR decay in 1000s
+lrate_decay = 250
+#Decay Rate
+decay_rate = 0.1
  

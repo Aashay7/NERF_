@@ -1,5 +1,8 @@
 import torch 
 import numpy as np
+import glob
+import imageio
+import os
 
 
 def cumprod_exclusive(tensor):
@@ -92,3 +95,20 @@ def get_focal(camera_angle, width):
     print(camera_angle)
     print(width)
     return (0.5 * width) / (np.tan(0.5 * float(camera_angle)))
+
+def make_dir(folderName):
+    image_dir = './' + folderName
+    if not os.path.exists(image_dir):
+        os.makedirs(image_dir)
+
+
+def create_gif(path_to_images, name_gif):
+    filenames = glob.glob(path_to_images)
+    filenames = sorted(filenames)
+    images = []
+    for filename in filenames:
+        images.append(imageio.imread(filename))
+    kargs = {"duration": 0.25}
+    imageio.mimsave(name_gif, images, "GIF", **kargs)
+
+

@@ -1,20 +1,25 @@
-from calendar import EPOCH
 import torch 
 import torch.nn as nn 
 from torch.utils.data import DataLoader
 from torchvision import transforms
 from torch.optim import Adam
 from data import readJson, getImagePathsAndTMs, TotalSceneData
-from utils import get_focal, get_device, img2mse, mse2psnr, encode_position, render_image_depth, sample_pdf
+from utils import get_focal, get_device, img2mse, mse2psnr, encode_position, render_image_depth, sample_pdf, make_dir, create_gif
 from nerf import NerfModel
-from helper import eval_model
+from helper import eval_model, visualize_performance
 import config
 
 #Constants
 BASE_DIR = r"./data"
+CHECKPOINT_DIR = r"./Checkpoints"
+IMAGE_DIR = r"./images"
 BATCH_SIZE = config.BATCH_SIZE
-NUM_EPOCHS = 1
+NUM_EPOCHS = 2
 LEARNING_RATE = 5e-4
+
+#Create Folders
+make_dir(folderName = CHECKPOINT_DIR)
+make_dir(folderName = IMAGE_DIR)
 
 print("Reading the Json Data")
 
@@ -91,6 +96,10 @@ for epoch in range(NUM_EPOCHS):
     train_running_loss = 0.0
     
     for image, originVectorCoarse, directionVectorCoarse, tValsCoarse in trainDataloader:
+        # image = image.to(device)
+        # originVectorCoarse = originVectorCoarse.to(device)
+        # directionVectorCoarse = directionVectorCoarse.to(device)
+        # tValsCoarse = tValsCoarse.to(device)
         
         image = torch.permute(image, (0,2,3,1))
         
@@ -106,7 +115,11 @@ for epoch in range(NUM_EPOCHS):
         
         # Sets model to TRAIN mode
         nerfCoarse.train()
-        (rgbCoarse, sigmaCoarse) = nerfCoarse(raysCoarse, dirsCoarse)
+        (rgbCoarse, sigmaCoarse) = nerfCoarse(raysCoarse.to(device), dirsCoarse.to(device))
+        
+        # Sets Them to cpu        
+        rgbCoarse = rgbCoarse.to('cpu')
+        sigmaCoarse = sigmaCoarse.to('cpu')
         
         (renderedCoarseImage, renderedCoarseDepth, coarseWeights) = render_image_depth(rgb = rgbCoarse, sigma=sigmaCoarse, tVals= tValsCoarse)
         
@@ -132,7 +145,11 @@ for epoch in range(NUM_EPOCHS):
         
         # Sets model to TRAIN mode
         nerfFine.train()
-        (rgbFine, sigmaFine) = nerfFine(raysFine, dirsFine)
+        (rgbFine, sigmaFine) = nerfFine(raysFine.to(device), dirsFine.to(device))
+        
+        # Sets Them to cpu        
+        rgbFine = rgbFine.to('cpu')
+        sigmaFine = sigmaFine.to('cpu')
         
         (renderedFineImage, renderedFineDepth, FineWeights) = render_image_depth(rgb = rgbFine, 
                                                                                  sigma = sigmaFine, 
@@ -150,21 +167,34 @@ for epoch in range(NUM_EPOCHS):
         optimizer.step()
         
         train_running_loss = train_running_loss + loss.item()
-        break
     
     train_loss.append(train_running_loss / len(trainDataloader))
     print("train_loss: ", train_loss)
     
     # Evaluating on Val Data 
     eval_loss = eval_model(dataloader = valDataloader, coarseModel=nerfCoarse, fineModel=nerfFine)
-    val_loss.append(eval_loss)
-    print("val_loss: ", val_loss)
+    val_loss.append(eval_loss  / len(valDataloader))
+    print("val_loss: ", val_loss)   
     
+    # Apply ExponentialDecay to update LR
+    newLR = LEARNING_RATE * (config.decay_rate ** (epoch / (config.lrate_decay * 1000)))
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = newLR
     
-    ###   update learning rate   ###
-    # decay_rate = 0.1
-    # decay_steps = args.lrate_decay * 1000
-    # new_lrate = args.lrate * (decay_rate ** (global_step / decay_steps))
-    # for param_group in optimizer.param_groups:
-    #     param_group['lr'] = 
-    # exit(1)
+    image, originVectorCoarse, directionVectorCoarse, tValsCoarse = iter(testDataloader).next()
+     
+    visualize_performance(epoch = epoch, image = image, originVectorCoarse = originVectorCoarse, 
+                          directionVectorCoarse = directionVectorCoarse, tValsCoarse = tValsCoarse, 
+                          coarseModel = nerfCoarse, fineModel = nerfFine, valLossData = val_loss, 
+                          trainLossData=train_loss,  dir = IMAGE_DIR)
+    
+    torch.save({
+        'epoch': epoch,
+        'nerfCoarse': nerfCoarse.state_dict(),
+        'nerfFine': nerfFine.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'train_loss': train_loss,
+        'val_loss': val_loss,
+    }, f"{CHECKPOINT_DIR}/ckpt_{epoch:03d}..tar") 
+    
+create_gif("images/*.png", "training.gif")
