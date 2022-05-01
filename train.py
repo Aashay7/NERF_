@@ -13,8 +13,9 @@ BASE_DIR = r"./drums"
 CHECKPOINT_DIR = r"./Checkpoints"
 IMAGE_DIR = r"./images"
 BATCH_SIZE = config.BATCH_SIZE
-NUM_EPOCHS = 100
+NUM_EPOCHS = 1
 LEARNING_RATE = 5e-4
+FINE = False # Determines if Hierarchical sampling needs to be used
 
 #Create Folders
 make_dir(folderName = CHECKPOINT_DIR)
@@ -63,23 +64,30 @@ valDataset = TotalSceneData(imagePaths= valImagePaths, c2wTMs = valC2WTMs,
 
 valDataloader = DataLoader(valDataset, batch_size=BATCH_SIZE, shuffle=True)
 
+#Check Hardware for GPU
+device = get_device()
+print("Using Device: ", device)
+
+
 #Nerf model
 
 nerfCoarse = NerfModel(numLayers = config.numLayers, xyzDims = config.xyzDims, 
                  dirDims = config.dirDims, batchSize = BATCH_SIZE, 
                  skipLayer = config.skipLayer, linearUnits = config.linearUnits)
+nerfCoarse.to(device)
+parameters = list(nerfCoarse.parameters())
 
-nerfFine = NerfModel(numLayers = config.numLayers, xyzDims = config.xyzDims, 
+if FINE:
+    nerfFine = NerfModel(numLayers = config.numLayers, xyzDims = config.xyzDims, 
                  dirDims = config.dirDims, batchSize = BATCH_SIZE, 
                  skipLayer = config.skipLayer, linearUnits = config.linearUnits)
+    
+    parameters = parameters + list(nerfFine.parameters()) 
+    nerfFine.to(device)
 
-device = get_device()
-print("Using Device: ", device)
-nerfCoarse.to(device)
-nerfFine.to(device)
 #Intitializing the optimizer
 
-optimizer = Adam(params = list(nerfCoarse.parameters()) + list(nerfFine.parameters()), 
+optimizer = Adam(params =  parameters, 
                  lr=LEARNING_RATE, betas=(0.9, 0.999))
 
 
@@ -95,12 +103,7 @@ for epoch in range(NUM_EPOCHS):
     print(f"Starting {epoch}...")
     train_running_loss = 0.0
     
-    for image, originVectorCoarse, directionVectorCoarse, tValsCoarse in trainDataloader:
-        # image = image.to(device)
-        # originVectorCoarse = originVectorCoarse.to(device)
-        # directionVectorCoarse = directionVectorCoarse.to(device)
-        # tValsCoarse = tValsCoarse.to(device)
-        
+    for image, originVectorCoarse, directionVectorCoarse, tValsCoarse in trainDataloader:        
         image = torch.permute(image, (0,2,3,1))
         
         # r = o + t*d 
@@ -122,45 +125,46 @@ for epoch in range(NUM_EPOCHS):
         sigmaCoarse = sigmaCoarse.to('cpu')
         
         (renderedCoarseImage, renderedCoarseDepth, coarseWeights) = render_image_depth(rgb = rgbCoarse, sigma=sigmaCoarse, tVals= tValsCoarse)
-        
-        # compute the mid-points of t vals
-        tValsCoarseMid = ((tValsCoarse[..., 1:] + tValsCoarse[..., :-1]) / 2.0)
-  
-        #Applying hierarchical sampling to get Fine points
-        tValsFine = sample_pdf(tValsMid=tValsCoarseMid,
-			weights=coarseWeights, N=config.numberFine, batchSize=BATCH_SIZE, 
-            imageHeight = config.image_height, imageWidth = config.image_width)
-        
-        tValsFine, _ = torch.sort(
-            torch.cat([tValsCoarse, tValsFine], -1 ), -1
+        if FINE:
+            # compute the mid-points of t vals
+            tValsCoarseMid = ((tValsCoarse[..., 1:] + tValsCoarse[..., :-1]) / 2.0)
+    
+            #Applying hierarchical sampling to get Fine points
+            tValsFine = sample_pdf(tValsMid=tValsCoarseMid,
+                weights=coarseWeights, N=config.numberFine, batchSize=BATCH_SIZE, 
+                imageHeight = config.image_height, imageWidth = config.image_width)
+            
+            tValsFine, _ = torch.sort(
+                torch.cat([tValsCoarse, tValsFine], -1 ), -1
 
-        )
-        
-        raysFine = (originVectorCoarse[..., None, :] + 
-			(directionVectorCoarse[..., None, :] * tValsFine[..., None]))
-        raysFine = encode_position(raysFine, config.xyzDims)
-        
-        dirsFine = torch.broadcast_to(directionVectorCoarse[..., None, :], size=tuple(raysFine[..., :3].size()))
-        dirsFine = encode_position(dirsFine, config.dirDims)
-        
-        # Sets model to TRAIN mode
-        nerfFine.train()
-        (rgbFine, sigmaFine) = nerfFine(raysFine.to(device), dirsFine.to(device))
-        
-        # Sets Them to cpu        
-        rgbFine = rgbFine.to('cpu')
-        sigmaFine = sigmaFine.to('cpu')
-        
-        (renderedFineImage, renderedFineDepth, FineWeights) = render_image_depth(rgb = rgbFine, 
-                                                                                 sigma = sigmaFine, 
-                                                                                 tVals = tValsFine)
+            )
+            
+            raysFine = (originVectorCoarse[..., None, :] + 
+                (directionVectorCoarse[..., None, :] * tValsFine[..., None]))
+            raysFine = encode_position(raysFine, config.xyzDims)
+            
+            dirsFine = torch.broadcast_to(directionVectorCoarse[..., None, :], size=tuple(raysFine[..., :3].size()))
+            dirsFine = encode_position(dirsFine, config.dirDims)
+            
+            # Sets model to TRAIN mode
+            nerfFine.train()
+            (rgbFine, sigmaFine) = nerfFine(raysFine.to(device), dirsFine.to(device))
+            
+            # Sets Them to cpu        
+            rgbFine = rgbFine.to('cpu')
+            sigmaFine = sigmaFine.to('cpu')
+            
+            (renderedFineImage, renderedFineDepth, FineWeights) = render_image_depth(rgb = rgbFine, 
+                                                                                    sigma = sigmaFine, 
+                                                                                    tVals = tValsFine)
         #Optimization
         optimizer.zero_grad() 
         
         #Calculate Coarse Loss
         loss = img2mse(renderedCoarseImage, image)
-        #Calculate Fine Loss and adding it with coarse loss
-        loss = loss + img2mse(renderedFineImage, image)  
+        if FINE:
+            #Calculate Fine Loss and adding it with coarse loss
+            loss = loss + img2mse(renderedFineImage, image)  
         
         #Backprop
         loss.backward()
@@ -172,7 +176,7 @@ for epoch in range(NUM_EPOCHS):
     print(f"EPOCH {epoch} Training Completed, Current Training Loss: {train_loss[-1]}, Next Evaluating Model")
     
     # Evaluating on Val Data 
-    eval_loss = eval_model(dataloader = valDataloader, coarseModel=nerfCoarse, fineModel=nerfFine)
+    eval_loss = eval_model(dataloader = valDataloader, coarseModel=nerfCoarse, fineModel=nerfFine if FINE else None)
     val_loss.append(eval_loss  / len(valDataloader))
     
     print(f"EPOCH {epoch} Evaluation Completed, Current Validation Loss: {val_loss[-1]}")
@@ -183,15 +187,20 @@ for epoch in range(NUM_EPOCHS):
     
     image, originVectorCoarse, directionVectorCoarse, tValsCoarse = iter(testDataloader).next()
      
+     
     visualize_performance(epoch = epoch, image = image, originVectorCoarse = originVectorCoarse, 
-                          directionVectorCoarse = directionVectorCoarse, tValsCoarse = tValsCoarse, 
-                          coarseModel = nerfCoarse, fineModel = nerfFine, valLossData = val_loss, 
-                          trainLossData=train_loss,  dir = IMAGE_DIR)
+                          directionVectorCoarse = directionVectorCoarse, 
+                          tValsCoarse = tValsCoarse, 
+                          coarseModel = nerfCoarse, 
+                          fineModel = nerfFine if FINE else None, 
+                          valLossData = val_loss, 
+                          trainLossData=train_loss,  
+                          dir = IMAGE_DIR)
     
     torch.save({
         'epoch': epoch,
         'nerfCoarse': nerfCoarse.state_dict(),
-        'nerfFine': nerfFine.state_dict(),
+        'nerfFine': nerfFine.state_dict() if FINE else None,
         'optimizer_state_dict': optimizer.state_dict(),
         'train_loss': train_loss,
         'val_loss': val_loss,

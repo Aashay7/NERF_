@@ -35,42 +35,44 @@ def eval_model( dataloader, coarseModel, fineModel):
             
             (renderedCoarseImage, renderedCoarseDepth, coarseWeights) = render_image_depth(rgb = rgbCoarse, sigma=sigmaCoarse, tVals= tValsCoarse)
             
-            # compute the mid-points of t vals
-            tValsCoarseMid = ((tValsCoarse[..., 1:] + tValsCoarse[..., :-1]) / 2.0)
-    
-            #Applying hierarchical sampling to get Fine points
-            tValsFine = sample_pdf(tValsMid=tValsCoarseMid,
-                weights=coarseWeights, N=config.numberFine, batchSize=config.BATCH_SIZE, 
-                imageHeight = config.image_height, imageWidth = config.image_width)
-            
-            tValsFine, _ = torch.sort(
-                torch.cat([tValsCoarse, tValsFine], -1 ), -1
+            if fineModel != None:
+                # compute the mid-points of t vals
+                tValsCoarseMid = ((tValsCoarse[..., 1:] + tValsCoarse[..., :-1]) / 2.0)
+        
+                #Applying hierarchical sampling to get Fine points
+                tValsFine = sample_pdf(tValsMid=tValsCoarseMid,
+                    weights=coarseWeights, N=config.numberFine, batchSize=config.BATCH_SIZE, 
+                    imageHeight = config.image_height, imageWidth = config.image_width)
+                
+                tValsFine, _ = torch.sort(
+                    torch.cat([tValsCoarse, tValsFine], -1 ), -1
 
-            )
-            
-            raysFine = (originVectorCoarse[..., None, :] + 
-                (directionVectorCoarse[..., None, :] * tValsFine[..., None]))
-            raysFine = encode_position(raysFine, config.xyzDims)
-            
-            dirsFine = torch.broadcast_to(directionVectorCoarse[..., None, :], size=tuple(raysFine[..., :3].size()))
-            dirsFine = encode_position(dirsFine, config.dirDims)
-            
-            # Sets model to TRAIN mode
-            fineModel.eval()
-            (rgbFine, sigmaFine) = fineModel(raysFine.to(device), dirsFine.to(device))
-            
-            # Sets Them to cpu        
-            rgbFine = rgbFine.to('cpu')
-            sigmaFine = sigmaFine.to('cpu')
-            
-            (renderedFineImage, renderedFineDepth, FineWeights) = render_image_depth(rgb = rgbFine, 
-                                                                                    sigma = sigmaFine, 
-                                                                                    tVals = tValsFine)
+                )
+                
+                raysFine = (originVectorCoarse[..., None, :] + 
+                    (directionVectorCoarse[..., None, :] * tValsFine[..., None]))
+                raysFine = encode_position(raysFine, config.xyzDims)
+                
+                dirsFine = torch.broadcast_to(directionVectorCoarse[..., None, :], size=tuple(raysFine[..., :3].size()))
+                dirsFine = encode_position(dirsFine, config.dirDims)
+                
+                # Sets model to TRAIN mode
+                fineModel.eval()
+                (rgbFine, sigmaFine) = fineModel(raysFine.to(device), dirsFine.to(device))
+                
+                # Sets Them to cpu        
+                rgbFine = rgbFine.to('cpu')
+                sigmaFine = sigmaFine.to('cpu')
+                
+                (renderedFineImage, renderedFineDepth, FineWeights) = render_image_depth(rgb = rgbFine, 
+                                                                                        sigma = sigmaFine, 
+                                                                                        tVals = tValsFine)
                         
             #Calculate Coarse Loss
             loss = img2mse(renderedCoarseImage, image)
-            #Calculate Fine Loss
-            loss = loss + img2mse(renderedFineImage, image)  
+            if fineModel != None:
+                #Calculate Fine Loss
+                loss = loss + img2mse(renderedFineImage, image)
                     
             running_loss = running_loss + loss.item()
     return running_loss / len(dataloader)
@@ -104,74 +106,88 @@ def visualize_performance( epoch, image, originVectorCoarse, directionVectorCoar
         
         (renderedCoarseImage, renderedCoarseDepth, coarseWeights) = render_image_depth(rgb = rgbCoarse, sigma=sigmaCoarse, tVals= tValsCoarse)
         
-        # compute the mid-points of t vals
-        tValsCoarseMid = ((tValsCoarse[..., 1:] + tValsCoarse[..., :-1]) / 2.0)
+        if fineModel != None: 
+            # compute the mid-points of t vals
+            tValsCoarseMid = ((tValsCoarse[..., 1:] + tValsCoarse[..., :-1]) / 2.0)
 
-        #Applying hierarchical sampling to get Fine points
-        tValsFine = sample_pdf(tValsMid=tValsCoarseMid,
-            weights=coarseWeights, N=config.numberFine, batchSize=config.BATCH_SIZE, 
-            imageHeight = config.image_height, imageWidth = config.image_width)
-        
-        tValsFine, _ = torch.sort(
-            torch.cat([tValsCoarse, tValsFine], -1 ), -1
+            #Applying hierarchical sampling to get Fine points
+            tValsFine = sample_pdf(tValsMid=tValsCoarseMid,
+                weights=coarseWeights, N=config.numberFine, batchSize=config.BATCH_SIZE, 
+                imageHeight = config.image_height, imageWidth = config.image_width)
+            
+            tValsFine, _ = torch.sort(
+                torch.cat([tValsCoarse, tValsFine], -1 ), -1
 
-        )
-        
-        raysFine = (originVectorCoarse[..., None, :] + 
-            (directionVectorCoarse[..., None, :] * tValsFine[..., None]))
-        raysFine = encode_position(raysFine, config.xyzDims)
-        
-        dirsFine = torch.broadcast_to(directionVectorCoarse[..., None, :], size=tuple(raysFine[..., :3].size()))
-        dirsFine = encode_position(dirsFine, config.dirDims)
-        
-        # Sets model to TRAIN mode
-        fineModel.eval()
-        (rgbFine, sigmaFine) = fineModel(raysFine.to(device), dirsFine.to(device))
-        
-        # Sets Them to cpu        
-        rgbFine = rgbFine.to('cpu')
-        sigmaFine = sigmaFine.to('cpu')
-        
-        (renderedFineImage, renderedFineDepth, FineWeights) = render_image_depth(rgb = rgbFine, 
-                                                                                sigma = sigmaFine, 
-                                                                                tVals = tValsFine)
+            )
+            
+            raysFine = (originVectorCoarse[..., None, :] + 
+                (directionVectorCoarse[..., None, :] * tValsFine[..., None]))
+            raysFine = encode_position(raysFine, config.xyzDims)
+            
+            dirsFine = torch.broadcast_to(directionVectorCoarse[..., None, :], size=tuple(raysFine[..., :3].size()))
+            dirsFine = encode_position(dirsFine, config.dirDims)
+            
+            # Sets model to TRAIN mode
+            fineModel.eval()
+            (rgbFine, sigmaFine) = fineModel(raysFine.to(device), dirsFine.to(device))
+            
+            # Sets Them to cpu        
+            rgbFine = rgbFine.to('cpu')
+            sigmaFine = sigmaFine.to('cpu')
+            
+            (renderedFineImage, renderedFineDepth, FineWeights) = render_image_depth(rgb = rgbFine, 
+                                                                                    sigma = sigmaFine, 
+                                                                                    tVals = tValsFine)
                             
         # Converting output tensors to images
-        # renderedCoarseImage = np.asarray(F.to_pil_image(renderedCoarseImage[0].detach()))
-        # renderedCoarseDepth = np.asarray(F.to_pil_image(renderedCoarseDepth[0].detach()))
-        # renderedFineImage   = np.asarray(F.to_pil_image(renderedFineImage[0].detach()))
-        # renderedFineDepth   = np.asarray(F.to_pil_image(renderedFineDepth[0].detach()))
         image = np.asarray(image[0].detach())
         renderedCoarseImage = np.asarray(renderedCoarseImage[0].detach())
         renderedCoarseDepth = np.asarray(renderedCoarseDepth[0].detach())
-        renderedFineImage   = np.asarray(renderedFineImage[0].detach())
-        renderedFineDepth   = np.asarray(renderedFineDepth[0].detach())
-        
+        if fineModel:
+            renderedFineImage   = np.asarray(renderedFineImage[0].detach())
+            renderedFineDepth   = np.asarray(renderedFineDepth[0].detach())
         # Plot the rgb, depth and the loss plot.
-        fig, ax = plt.subplots(nrows=2, ncols=4, figsize=(25, 10))
-        ax[0][0].imshow(image)
-        ax[0][0].set_title(f"Predicted Coarse Image: {epoch:03d}")
-        ax[0][1].imshow(renderedCoarseImage)
-        ax[0][1].set_title(f"Predicted Coarse Image: {epoch:03d}")
+        fig, ax = plt.subplots(nrows=2 if fineModel else 1, ncols=4, figsize=(25, 10))
+               
+        if fineModel:
+            ax[0][0].imshow(image)
+            ax[0][0].set_title(f"Actual Image: {epoch:03d}")
+            
+            ax[0][1].imshow(renderedCoarseImage)
+            ax[0][1].set_title(f"Predicted Coarse Image: {epoch:03d}")
 
-        ax[0][2].imshow(renderedCoarseDepth)
-        ax[0][2].set_title(f"Depth Coarse Map: {epoch:03d}")
+            ax[0][2].imshow(renderedCoarseDepth)
+            ax[0][2].set_title(f"Depth Coarse Map: {epoch:03d}")
 
-        ax[0][3].plot(valLossData)
-        ax[0][3].set_xticks(np.arange(0, epoch + 1, 5.0))
-        ax[0][3].set_title(f"Val Loss Plot: {epoch:03d}")
-        
-        ax[1][0].imshow(image)
-        ax[1][0].set_title(f"Predicted Coarse Image: {epoch:03d}")
-        ax[1][1].imshow(renderedFineImage)
-        ax[1][1].set_title(f"Predicted Fine Image: {epoch:03d}")
+            ax[0][3].plot(valLossData)
+            ax[0][3].set_xticks(np.arange(0, epoch + 1, 5.0))
+            ax[0][3].set_title(f"Val Loss Plot: {epoch:03d}")
+            
+            ax[1][0].imshow(image)
+            ax[1][0].set_title(f"Actual Image: {epoch:03d}")
+            
+            ax[1][1].imshow(renderedFineImage)
+            ax[1][1].set_title(f"Predicted Fine Image: {epoch:03d}")
 
-        ax[1][2].imshow(renderedFineDepth)
-        ax[1][2].set_title(f"Depth Fine Map: {epoch:03d}")
+            ax[1][2].imshow(renderedFineDepth)
+            ax[1][2].set_title(f"Depth Fine Map: {epoch:03d}")
 
-        ax[1][3].plot(trainLossData)
-        ax[1][3].set_xticks(np.arange(0, epoch + 1, 5.0))
-        ax[1][3].set_title(f"Train Loss Plot: {epoch:03d}")
+            ax[1][3].plot(trainLossData)
+            ax[1][3].set_xticks(np.arange(0, epoch + 1, 5.0))
+            ax[1][3].set_title(f"Train Loss Plot: {epoch:03d}")
+        else:
+            ax[0].imshow(image)
+            ax[0].set_title(f"Actual Image: {epoch:03d}")
+            
+            ax[1].imshow(renderedCoarseImage)
+            ax[1].set_title(f"Predicted Coarse Image: {epoch:03d}")
+
+            ax[2].imshow(renderedCoarseDepth)
+            ax[2].set_title(f"Depth Coarse Map: {epoch:03d}")
+
+            ax[3].plot(valLossData)
+            ax[3].set_xticks(np.arange(0, epoch + 1, 5.0))
+            ax[3].set_title(f"Val Loss Plot: {epoch:03d}")
 
         fig.savefig(f"{dir}/{epoch:03d}.png")
         plt.close()
