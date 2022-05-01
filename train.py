@@ -13,8 +13,9 @@ BASE_DIR = r"./drums"
 CHECKPOINT_DIR = r"./Checkpoints"
 IMAGE_DIR = r"./images"
 BATCH_SIZE = config.BATCH_SIZE
-NUM_EPOCHS = 1
-LEARNING_RATE = 5e-4
+NUM_EPOCHS = 10
+# LEARNING_RATE = 5e-4
+LEARNING_RATE = 5e-3
 FINE = False # Determines if Hierarchical sampling needs to be used
 
 #Create Folders
@@ -181,9 +182,9 @@ for epoch in range(NUM_EPOCHS):
     
     print(f"EPOCH {epoch} Evaluation Completed, Current Validation Loss: {val_loss[-1]}")
     # Apply ExponentialDecay to update LR
-    newLR = LEARNING_RATE * (config.decay_rate ** (epoch / (config.lrate_decay * 1000)))
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = newLR
+    # newLR = LEARNING_RATE * (config.decay_rate ** (epoch / (config.lrate_decay * 1000)))
+    # for param_group in optimizer.param_groups:
+    #     param_group['lr'] = newLR
     
     image, originVectorCoarse, directionVectorCoarse, tValsCoarse = iter(testDataloader).next()
      

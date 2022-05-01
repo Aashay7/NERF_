@@ -22,7 +22,7 @@ numberFine = 64
 numLayers = 8
 
 # number of linear units
-linearUnits = 128
+linearUnits = 5
 
 # skip layer
 skipLayer = 4

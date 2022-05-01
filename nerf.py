@@ -47,6 +47,7 @@ class NerfModel(nn.Module):
             
         x = F.relu(self.lastLinearLayer(feature))
         
+        # rgb = nn.Sigmoid(self.rgbLayer(x))
         rgb = torch.sigmoid(self.rgbLayer(x))
         
         return (rgb, sigma)
