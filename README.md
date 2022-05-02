@@ -1,2 +1,8 @@
-# NERF_
-Implementation of 3D View Synthesis using Neural Radiance Fields.
+# 3D View Synthesis using Neural Radiance Fields
+
+[![Contributors][contributors-shield]][contributors-url]
+[![Forks][forks-shield]][forks-url]
+[![Stargazers][stars-shield]][stars-url]
+[![Issues][issues-shield]][issues-url]
+[![MIT License][license-shield]][license-url]
+[![LinkedIn][linkedin-shield]][linkedin-url]
