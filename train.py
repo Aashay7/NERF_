@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-# Set Seed for reproducibility
+#Set random seed for reproducing the same result for every time.
 tf.random.set_seed(42)
 
 # import the necessary packages
