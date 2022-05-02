@@ -18,9 +18,9 @@ import os
 
 ## DATASET PREPARATION
 print("Reading the data...")
-traindata = read_json(config.TRAIN_JSON)
-valdata = read_json(config.VAL_JSON)
-testdata = read_json(config.TEST_JSON)
+traindata = read_json(config.TRAIN_DATA)
+valdata = read_json(config.VAL_DATA)
+testdata = read_json(config.TEST_DATA)
 
 focalLength = get_focal_from_fov(fieldOfView=traindata["camera_angle_x"], width=config.IMAGE_WIDTH)
 
@@ -45,7 +45,7 @@ valImageDs   = (tf.data.Dataset.from_tensor_slices(valImagePaths).map(getImages,
 testImageDs  = (tf.data.Dataset.from_tensor_slices(testImagePaths).map(getImages, num_parallel_calls=config.AUTO))
 
 # instantiate the GetRays object
-getRays = GetRays(focalLength=focalLength, imageWidth=config.IMAGE_WIDTH, imageHeight=config.IMAGE_HEIGHT, near=config.NEAR, far=config.FAR, nC=config.N_C)
+getRays = GetRays(focalLength=focalLength, imageWidth=config.IMAGE_WIDTH, imageHeight=config.IMAGE_HEIGHT, NEAR_BOUNDS=config.NEAR_BOUNDS, FAR_BOUNDS=config.FAR_BOUNDS, nC=config.NUM_COARSE)
 
 # get the train validation and test rays dataset
 print("[UPDATE] building the rays dataset pipeline...")
@@ -80,13 +80,13 @@ testdata = (
 )
 
 # Instantiation of the Coarse Model
-coarseModel = get_model(lxyz=config.L_XYZ, lDir=config.L_DIR, batchSize=config.BATCH_SIZE, denseUnits=config.DENSE_UNITS, skipLayer=config.SKIP_LAYER)
+coarseModel = get_model(lxyz=config.DIMS_XYZ, lDir=config.DIMS_DIR, batchSize=config.BATCH_SIZE, denseUnits=config.UNITS, skipLayer=config.SKIP_LAYER)
 
 # Instantiation of the Fine Model
-fineModel = get_model(lxyz=config.L_XYZ, lDir=config.L_DIR, batchSize=config.BATCH_SIZE, denseUnits=config.DENSE_UNITS, skipLayer=config.SKIP_LAYER)
+fineModel = get_model(lxyz=config.DIMS_XYZ, lDir=config.DIMS_DIR, batchSize=config.BATCH_SIZE, denseUnits=config.UNITS, skipLayer=config.SKIP_LAYER)
 
 # NerF trainer model.
-nerfModel = Nerf_Trainer(coarseModel=coarseModel, fineModel=fineModel, lxyz=config.L_XYZ, lDir=config.L_DIR, encoderFn=encoder_fn, renderImageDepth=render_image_depth, samplePdf=sample_pdf, nF=config.N_F)
+nerfModel = Nerf_Trainer(coarseModel=coarseModel, fineModel=fineModel, lxyz=config.DIMS_XYZ, lDir=config.DIMS_DIR, encoderFn=encoder_fn, renderImageDepth=render_image_depth, samplePdf=sample_pdf, nF=config.NUM_FINE)
 
 # Compiling the Model (optimizer used : Adam, Loss Function : Mean Squared Error)
 nerfModel.compile(optimizerCoarse=Adam(),optimizerFine=Adam(),lossFn=MeanSquaredError())
@@ -96,7 +96,7 @@ if not os.path.exists(config.IMAGE_PATH):
 	os.makedirs(config.IMAGE_PATH)
 
 # Train Monitor Callback to track the model learning and evaluation results.
-trainMonitorCallback = get_train_monitor(testDs=testdata,encoderFn=encoder_fn, lxyz=config.L_XYZ, lDir=config.L_DIR, imagePath=config.IMAGE_PATH)
+trainMonitorCallback = get_train_monitor(testDs=testdata,encoderFn=encoder_fn, lxyz=config.DIMS_XYZ, lDir=config.DIMS_DIR, imagePath=config.IMAGE_PATH)
 
 # NERF Model training
 print("Training initiated....")

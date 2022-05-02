@@ -38,13 +38,13 @@ class GetImages():
 
 # Directly from the NERF Paper Repository
 class GetRays:	
-	def __init__(self, focalLength, imageWidth, imageHeight, near, 
-		far, nC):
+	def __init__(self, focalLength, imageWidth, imageHeight, NEAR_BOUNDS, 
+		FAR_BOUNDS, nC):
 		self.focalLength = focalLength
 		self.imageWidth = imageWidth
 		self.imageHeight = imageHeight
-		self.near = near
-		self.far = far
+		self.NEAR_BOUNDS = NEAR_BOUNDS
+		self.FAR_BOUNDS = FAR_BOUNDS
 		self.nC = nC
 
 	def __call__(self, camera2world):
@@ -82,10 +82,10 @@ class GetRays:
 		rayO = tf.broadcast_to(translation, tf.shape(rayD))
 
 		# Get the sample points from the ray
-		tVals = tf.linspace(self.near, self.far, self.nC)
+		tVals = tf.linspace(self.NEAR_BOUNDS, self.FAR_BOUNDS, self.nC)
 		noiseShape = list(rayO.shape[:-1]) + [self.nC]
 		noise = (tf.random.uniform(shape=noiseShape) * 
-			(self.far - self.near) / self.nC)
+			(self.FAR_BOUNDS - self.NEAR_BOUNDS) / self.nC)
 		tVals = tVals + noise
 
 		# Return origin, direction of the ray and the sample points
