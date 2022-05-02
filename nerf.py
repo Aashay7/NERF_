@@ -32,7 +32,6 @@ class NerfModel(nn.Module):
     def forward(self, input_ray, input_dir ):
         
         x = input_ray
-        
         for i, _ in enumerate(self.linearLayers):
             x = self.linearLayers[i](x)
             x = F.relu(x)
@@ -46,8 +45,7 @@ class NerfModel(nn.Module):
         feature = torch.cat([feature, input_dir], -1) # Residual Connection
             
         x = F.relu(self.lastLinearLayer(feature))
-        
-        # rgb = nn.Sigmoid(self.rgbLayer(x))
+            
         rgb = torch.sigmoid(self.rgbLayer(x))
         
         return (rgb, sigma)

@@ -6,6 +6,15 @@ import os
 
 
 def cumprod_exclusive(tensor):
+    """
+    https://github.com/lucidrains/pi-GAN-pytorch/blob/0067bffdcea65feb552ee29f2c94dc59b3a545f2/pi_gan_pytorch/nerf.py#L13#L13
+
+    Args:
+        tensor (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
     cumprod = torch.cumprod(tensor, dim = -1)
     cumprod = torch.roll(cumprod, 1, -1)
     cumprod[..., 0] = 1.
@@ -35,6 +44,7 @@ def render_image_depth(rgb, sigma, tVals):
     image = torch.sum(weights[...,None] * rgb, -2)
     depth = torch.sum(weights * tVals, -1)
     
+    # image = image + (1.-torch.sum(weights, -1)[...,None])
     # return rgb, depth map and weights
     return (image, depth, weights)
 
@@ -43,7 +53,7 @@ def encode_position(x, dims):
     positions = [x]
     for i in range(dims):
         for fn in [torch.sin , torch.cos]:
-            positions.append(fn(2.0 ** i * x))
+            positions.append(fn((2.0 ** i) * x))
     
     return torch.concat(positions, axis=-1)
 
@@ -108,5 +118,3 @@ def create_gif(path_to_images, name_gif):
         images.append(imageio.imread(filename))
     kargs = {"duration": 0.25}
     imageio.mimsave(name_gif, images, "GIF", **kargs)
-
-

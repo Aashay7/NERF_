@@ -6,14 +6,14 @@ import numpy as np
 import torchvision.transforms.functional as F
 
 
-def eval_model( dataloader, coarseModel, fineModel):
+def eval_model( dataloader, coarseModel, fineModel, loss_fn):
     device = get_device()
-    
     running_loss = 0.0
     with torch.no_grad():
         for image, originVectorCoarse, directionVectorCoarse, tValsCoarse in dataloader:
         
             image = torch.permute(image, (0,2,3,1))
+            image = image / 255
             
             # r = o + t*d 
             raysCoarse = (originVectorCoarse[..., None, :] + 
@@ -69,10 +69,10 @@ def eval_model( dataloader, coarseModel, fineModel):
                                                                                         tVals = tValsFine)
                         
             #Calculate Coarse Loss
-            loss = img2mse(renderedCoarseImage, image)
+            loss = loss_fn(renderedCoarseImage, image)
             if fineModel != None:
                 #Calculate Fine Loss
-                loss = loss + img2mse(renderedFineImage, image)
+                loss = loss + loss_fn(renderedFineImage, image)
                     
             running_loss = running_loss + loss.item()
     return running_loss / len(dataloader)
@@ -85,6 +85,7 @@ def visualize_performance( epoch, image, originVectorCoarse, directionVectorCoar
     
     with torch.no_grad():
         image = torch.permute(image, (0,2,3,1))
+        image = image / 255
         
         # r = o + t*d 
         raysCoarse = (originVectorCoarse[..., None, :] + 
@@ -95,8 +96,8 @@ def visualize_performance( epoch, image, originVectorCoarse, directionVectorCoar
         raysCoarse = encode_position(raysCoarse, config.xyzDims)
         dirsCoarse = torch.broadcast_to(directionVectorCoarse[..., None, :], size=tuple(raysCoarse[..., :3].size()))
         dirsCoarse = encode_position(dirsCoarse, config.dirDims)     
-        
-        # Sets model to TRAIN mode
+                
+        # Sets model to eval mode
         coarseModel.eval()
         (rgbCoarse, sigmaCoarse) = coarseModel(raysCoarse.to(device), dirsCoarse.to(device))
         
@@ -105,7 +106,6 @@ def visualize_performance( epoch, image, originVectorCoarse, directionVectorCoar
         sigmaCoarse = sigmaCoarse.to('cpu')
         
         (renderedCoarseImage, renderedCoarseDepth, coarseWeights) = render_image_depth(rgb = rgbCoarse, sigma=sigmaCoarse, tVals= tValsCoarse)
-        
         if fineModel != None: 
             # compute the mid-points of t vals
             tValsCoarseMid = ((tValsCoarse[..., 1:] + tValsCoarse[..., :-1]) / 2.0)
@@ -138,7 +138,7 @@ def visualize_performance( epoch, image, originVectorCoarse, directionVectorCoar
             (renderedFineImage, renderedFineDepth, FineWeights) = render_image_depth(rgb = rgbFine, 
                                                                                     sigma = sigmaFine, 
                                                                                     tVals = tValsFine)
-                            
+                              
         # Converting output tensors to images
         image = np.asarray(image[0].detach())
         renderedCoarseImage = np.asarray(renderedCoarseImage[0].detach())

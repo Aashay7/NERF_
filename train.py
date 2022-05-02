@@ -8,15 +8,16 @@ from nerf import NerfModel
 from helper import eval_model, visualize_performance
 import config
 
+torch.manual_seed(42)
 #Constants
 BASE_DIR = r"./drums"
 CHECKPOINT_DIR = r"./Checkpoints"
 IMAGE_DIR = r"./images"
 BATCH_SIZE = config.BATCH_SIZE
-NUM_EPOCHS = 10
-# LEARNING_RATE = 5e-4
-LEARNING_RATE = 5e-3
-FINE = False # Determines if Hierarchical sampling needs to be used
+NUM_EPOCHS = 100
+# LEARNING_RATE = 5e-6
+LEARNING_RATE = 5e-4
+FINE = False # Determines if Hierarchical sampling and Fine models is being used
 
 #Create Folders
 make_dir(folderName = CHECKPOINT_DIR)
@@ -42,7 +43,7 @@ valImagePaths, valC2WTMs = getImagePathsAndTMs(jsonData=valData, basePath=BASE_D
 
 #Transforms for the Images
 data_transforms = transforms.Compose([
-    transforms.Resize((config.image_height, config.image_width))
+    transforms.Resize((config.image_height, config.image_width), interpolation = transforms.InterpolationMode.BICUBIC)
 ])
 
 
@@ -91,7 +92,8 @@ if FINE:
 optimizer = Adam(params =  parameters, 
                  lr=LEARNING_RATE, betas=(0.9, 0.999))
 
-
+# loss_fn = torch.nn.MSELoss()
+loss_fn = img2mse
 train_loss = []
 val_loss = []
 
@@ -106,11 +108,11 @@ for epoch in range(NUM_EPOCHS):
     
     for image, originVectorCoarse, directionVectorCoarse, tValsCoarse in trainDataloader:        
         image = torch.permute(image, (0,2,3,1))
-        
+        image = image / 255
+        # print("min ", image.min(), " max: ", image.max())
         # r = o + t*d 
         raysCoarse = (originVectorCoarse[..., None, :] + 
 			(directionVectorCoarse[..., None, :] * tValsCoarse[..., None]))
-        
         
         #Encoding Inputs
         raysCoarse = encode_position(raysCoarse, config.xyzDims)
@@ -159,32 +161,34 @@ for epoch in range(NUM_EPOCHS):
                                                                                     sigma = sigmaFine, 
                                                                                     tVals = tValsFine)
         #Optimization
-        optimizer.zero_grad() 
-        
+        optimizer.zero_grad()
         #Calculate Coarse Loss
-        loss = img2mse(renderedCoarseImage, image)
+        loss = loss_fn(renderedCoarseImage, image.type(torch.float32))
+        # print(loss)
         if FINE:
             #Calculate Fine Loss and adding it with coarse loss
-            loss = loss + img2mse(renderedFineImage, image)  
+            loss = loss + loss_fn(renderedFineImage, image)  
         
         #Backprop
         loss.backward()
         optimizer.step()
-        
         train_running_loss = train_running_loss + loss.item()
-    
+    # print(rgbCoarse)
+    # exit()
     train_loss.append(train_running_loss / len(trainDataloader))
     print(f"EPOCH {epoch} Training Completed, Current Training Loss: {train_loss[-1]}, Next Evaluating Model")
-    
+    print(f"EPOCH {epoch} Training PSNR: {mse2psnr(torch.Tensor([train_loss[-1]]))}")
     # Evaluating on Val Data 
-    eval_loss = eval_model(dataloader = valDataloader, coarseModel=nerfCoarse, fineModel=nerfFine if FINE else None)
-    val_loss.append(eval_loss  / len(valDataloader))
+    eval_loss = eval_model(dataloader = valDataloader, coarseModel=nerfCoarse, fineModel=nerfFine if FINE else None, loss_fn = loss_fn)
+    val_loss.append(eval_loss)
     
     print(f"EPOCH {epoch} Evaluation Completed, Current Validation Loss: {val_loss[-1]}")
+    print(f"EPOCH {epoch} Evaluation PSNR: {mse2psnr(torch.Tensor([val_loss[-1]]))}")
     # Apply ExponentialDecay to update LR
-    # newLR = LEARNING_RATE * (config.decay_rate ** (epoch / (config.lrate_decay * 1000)))
-    # for param_group in optimizer.param_groups:
-    #     param_group['lr'] = newLR
+    newLR = LEARNING_RATE * (config.decay_rate ** (epoch / (config.lrate_decay * 1000)))
+    print("new LR", newLR)
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = newLR
     
     image, originVectorCoarse, directionVectorCoarse, tValsCoarse = iter(testDataloader).next()
      
