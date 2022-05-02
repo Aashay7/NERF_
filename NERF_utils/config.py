@@ -9,6 +9,7 @@ TRAIN_DATA = os.path.join(DATAPATH, "transforms_train.json")
 VAL_DATA = os.path.join(DATAPATH, "transforms_val.json")
 TEST_DATA = os.path.join(DATAPATH, "transforms_test.json")
 
+#To optimize the Tensorflow Data Pipelines
 AUTO = AUTOTUNE
 
 IMAGE_WIDTH = 100

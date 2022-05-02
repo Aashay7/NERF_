@@ -7,6 +7,7 @@ def get_focal_from_fov(fieldOfView, width):
 
 
 def render_image_depth(rgb, sigma, tVals):
+    #Converting predicted RGB and Sigma Values to RGB image and Depth Map using Volumetric Rendering 
 	sigma = sigma[..., 0]
 	
 	delta = tVals[..., 1:] - tVals[..., :-1]
