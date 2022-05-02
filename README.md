@@ -15,7 +15,7 @@ The final training was carried out on `Carbonate-DL` and `Carbonate-GPU` and the
 
 
 ### About the Project
-
+Neural volume rendering refers to methods that generate images or video by tracing a ray into the scene and taking an integral of some sort over the length of the ray.
 
 ### How it works
 
